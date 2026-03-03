@@ -5,6 +5,8 @@ from typing import Optional
 from io import BytesIO
 from PIL import Image
 from pillow_heif import HeifImagePlugin
+import pillow_avif  # noqa: F401 — registers AVIF plugin on import
+import pillow_jxl   # noqa: F401 — registers JPEG XL plugin on import
 from .converter_interface import ConverterInterface
 
 try:
@@ -19,6 +21,7 @@ try:
     _CAIROSVG_AVAILABLE = True
 except (ImportError, OSError):
     _CAIROSVG_AVAILABLE = False
+
 
 class PillowConverter(ConverterInterface):
     supported_input_formats: set = {
@@ -40,6 +43,22 @@ class PillowConverter(ConverterInterface):
         'tga',
         'jp2',
         'sgi',
+        # Extended formats
+        'icns',
+        'dds',
+        'psd',  # read-only
+        'blp',
+        'cur',  # read-only
+        'dcx',
+        'fli',
+        'flc',
+        'xbm',
+        'xpm',  # read-only
+        'msp',
+        'qoi',
+        'dib',
+        'avif',
+        'jxl',
     }
     supported_output_formats: set = {
         'jpeg',
@@ -60,6 +79,19 @@ class PillowConverter(ConverterInterface):
         'jp2',
         'sgi',
         'pdf',
+        # Extended formats (all writable; psd/cur/xpm are read-only and excluded)
+        'icns',
+        'dds',
+        'blp',
+        'dcx',
+        'fli',
+        'flc',
+        'xbm',
+        'msp',
+        'qoi',
+        'dib',
+        'avif',
+        'jxl',
     }
     def __init__(self, input_file: str, output_dir: str, input_type: str, output_type: str):
         """
@@ -104,6 +136,9 @@ class PillowConverter(ConverterInterface):
         base_formats = super().get_formats_compatible_with(format_type)
         # Can convert FROM SVG but not TO SVG (rasterization only)
         base_formats.discard('svg')
+        # Read-only formats cannot be output targets
+        for ro_fmt in ('psd', 'cur', 'xpm'):
+            base_formats.discard(ro_fmt)
         # SVG input requires cairosvg
         if format_type.lower() == 'svg' and not _CAIROSVG_AVAILABLE:
             return set()
@@ -163,7 +198,8 @@ class PillowConverter(ConverterInterface):
             
             # Handle transparency for formats that don't support alpha
             output_fmt = self.output_type.lower()
-            _no_alpha_formats = {'jpg', 'jpeg', 'pdf', 'sgi', 'bmp', 'ppm', 'pcx', 'gif', 'tga'}
+            _no_alpha_formats = {'jpg', 'jpeg', 'pdf', 'sgi', 'bmp', 'ppm', 'pcx', 'gif', 'tga',
+                                    'dib', 'msp', 'xbm', 'fli', 'flc', 'dcx'}
             if output_fmt in _no_alpha_formats and img.mode in ['RGBA', 'LA', 'P']:
                 if img.mode == 'P':
                     img = img.convert('RGBA')
@@ -176,7 +212,7 @@ class PillowConverter(ConverterInterface):
 
             # Set quality parameters
             save_kwargs = {}
-            if output_fmt in ['jpg', 'jpeg', 'webp']:
+            if output_fmt in ['jpg', 'jpeg', 'webp', 'avif', 'jxl']:
                 if quality == 'high':
                     save_kwargs['quality'] = 95
                 elif quality == 'low':
