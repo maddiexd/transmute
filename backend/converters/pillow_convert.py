@@ -22,23 +22,45 @@ except (ImportError, OSError):
 
 class PillowConverter(ConverterInterface):
     supported_input_formats: set = {
-        'jpeg', 
+        'jpeg',
         'png',
-        'gif', 
-        'bmp', 
-        'tiff', 
+        'gif',
+        'bmp',
+        'tiff',
         'tif',
-        'webp', 
-        'ico', 
-        'ppm', 
-        'pgm', 
-        'pbm', 
+        'webp',
+        'ico',
+        'ppm',
+        'pgm',
+        'pbm',
         'pcx',
         'heif',
         'heic',
-        'svg'
+        'svg',
+        'tga',
+        'jp2',
+        'sgi',
     }
-    supported_output_formats: set = set(supported_input_formats)
+    supported_output_formats: set = {
+        'jpeg',
+        'png',
+        'gif',
+        'bmp',
+        'tiff',
+        'tif',
+        'webp',
+        'ico',
+        'ppm',
+        'pgm',
+        'pbm',
+        'pcx',
+        'heif',
+        'heic',
+        'tga',
+        'jp2',
+        'sgi',
+        'pdf',
+    }
     def __init__(self, input_file: str, output_dir: str, input_type: str, output_type: str):
         """
         Initialize Pillow converter.
@@ -86,6 +108,7 @@ class PillowConverter(ConverterInterface):
         if format_type.lower() == 'svg' and not _CAIROSVG_AVAILABLE:
             return set()
         return base_formats
+
     
     def convert(self, overwrite: bool = True, quality: Optional[str] = None) -> list[str]:
         """
@@ -138,10 +161,10 @@ class PillowConverter(ConverterInterface):
                 # Open the image
                 img = Image.open(self.input_file)
             
-            # Handle transparency for formats that don't support it
+            # Handle transparency for formats that don't support alpha
             output_fmt = self.output_type.lower()
-            if output_fmt in ['jpg', 'jpeg'] and img.mode in ['RGBA', 'LA', 'P']:
-                # Convert RGBA to RGB for JPEG (add white background)
+            _no_alpha_formats = {'jpg', 'jpeg', 'pdf', 'sgi', 'bmp', 'ppm', 'pcx', 'gif', 'tga'}
+            if output_fmt in _no_alpha_formats and img.mode in ['RGBA', 'LA', 'P']:
                 if img.mode == 'P':
                     img = img.convert('RGBA')
                 if img.mode in ['RGBA', 'LA']:
@@ -150,7 +173,7 @@ class PillowConverter(ConverterInterface):
                         img = img.convert('RGBA')
                     background.paste(img, mask=img.split()[-1])  # Use alpha channel as mask
                     img = background
-            
+
             # Set quality parameters
             save_kwargs = {}
             if output_fmt in ['jpg', 'jpeg', 'webp']:
@@ -160,11 +183,20 @@ class PillowConverter(ConverterInterface):
                     save_kwargs['quality'] = 60
                 else:  # medium or None
                     save_kwargs['quality'] = 85
-            
+
+            # JPEG 2000 uses quality_layers instead of quality
+            if output_fmt == 'jp2':
+                if quality == 'high':
+                    save_kwargs['quality_layers'] = [100]
+                elif quality == 'low':
+                    save_kwargs['quality_layers'] = [30]
+                else:
+                    save_kwargs['quality_layers'] = [80]
+
             # For PNG, handle optimization
             if output_fmt == 'png':
                 save_kwargs['optimize'] = True
-            
+
             # Save the image
             img.save(output_file, **save_kwargs)
             
