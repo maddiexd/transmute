@@ -115,17 +115,28 @@ function History() {
     setError(null)
 
     const idsToDelete = Array.from(selectedIds)
-    for (const conversionId of idsToDelete) {
-      try {
+
+    const results = await Promise.allSettled(
+      idsToDelete.map(async (conversionId) => {
         const response = await fetch(`/api/conversions/${conversionId}`, { method: 'DELETE' })
-        if (!response.ok) throw new Error('Delete failed')
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Delete failed')
-      }
+        if (!response.ok) throw new Error(`Delete failed for ${conversionId}`)
+        setConversions(prev => prev.filter(c => c.id !== conversionId))
+        setSelectedIds(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(conversionId)
+          return newSet
+        })
+      })
+    )
+
+    const errors = results
+      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+      .map(r => (r.reason instanceof Error ? r.reason.message : 'Delete failed'))
+
+    if (errors.length > 0) {
+      setError(errors.join('; '))
     }
 
-    setConversions(prev => prev.filter(c => !selectedIds.has(c.id)))
-    setSelectedIds(new Set())
     setDeletingSelected(false)
   }
 

@@ -69,19 +69,30 @@ function Files() {
     if (selectedIds.size === 0) return
     
     setDeletingSelected(true)
+    setError(null)
     const idsToDelete = Array.from(selectedIds)
     
-    for (const fileId of idsToDelete) {
-      try {
+    const results = await Promise.allSettled(
+      idsToDelete.map(async (fileId) => {
         const response = await fetch(`/api/files/${fileId}`, { method: 'DELETE' })
-        if (!response.ok) throw new Error('Delete failed')
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Delete failed')
-      }
+        if (!response.ok) throw new Error(`Delete failed for ${fileId}`)
+        setFiles(prev => prev.filter(f => f.id !== fileId))
+        setSelectedIds(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(fileId)
+          return newSet
+        })
+      })
+    )
+
+    const errors = results
+      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+      .map(r => (r.reason instanceof Error ? r.reason.message : 'Delete failed'))
+
+    if (errors.length > 0) {
+      setError(errors.join('; '))
     }
-    
-    setFiles(prev => prev.filter(f => !selectedIds.has(f.id)))
-    setSelectedIds(new Set())
+
     setDeletingSelected(false)
   }
 
