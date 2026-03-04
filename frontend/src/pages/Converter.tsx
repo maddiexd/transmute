@@ -61,49 +61,54 @@ function Converter() {
     setError(null)
     setUploadCount(files.length)
 
-    const newPendingFiles: PendingFile[] = []
-
-    for (const file of files) {
+    const promises = files.map(async (file) => {
       const formData = new FormData()
       formData.append('file', file)
 
-      try {
-        const response = await fetch('/api/files', {
-          method: 'POST',
-          body: formData,
-        })
+      const response = await fetch('/api/files', {
+        method: 'POST',
+        body: formData,
+      })
 
-        if (!response.ok) {
-          throw new Error(`Upload failed for ${file.name}: ${response.statusText}`)
-        }
-
-        const data = await response.json()
-        const fileInfo: FileInfo = {
-          id: data.metadata.id,
-          original_filename: data.metadata.original_filename,
-          media_type: data.metadata.media_type,
-          extension: data.metadata.extension,
-          size_bytes: data.metadata.size_bytes,
-          created_at: data.metadata.created_at,
-          compatible_formats: data.metadata.compatible_formats,
-        }
-
-        // Set default format (alphabetically first)
-        const sortedFormats = fileInfo.compatible_formats
-          ? [...fileInfo.compatible_formats].sort()
-          : []
-        const defaultFormat = sortedFormats[0] || ''
-
-        newPendingFiles.push({
-          file: fileInfo,
-          selectedFormat: defaultFormat,
-        })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Upload failed')
+      if (!response.ok) {
+        throw new Error(`Upload failed for ${file.name}: ${response.statusText}`)
       }
+
+      const data = await response.json()
+      const fileInfo: FileInfo = {
+        id: data.metadata.id,
+        original_filename: data.metadata.original_filename,
+        media_type: data.metadata.media_type,
+        extension: data.metadata.extension,
+        size_bytes: data.metadata.size_bytes,
+        created_at: data.metadata.created_at,
+        compatible_formats: data.metadata.compatible_formats,
+      }
+
+      const sortedFormats = fileInfo.compatible_formats
+        ? [...fileInfo.compatible_formats].sort()
+        : []
+      const defaultFormat = sortedFormats[0] || ''
+
+      const pending: PendingFile = { file: fileInfo, selectedFormat: defaultFormat }
+
+      // Add to pending list immediately as each upload completes
+      setPendingFiles((prev) => [...prev, pending])
+      setUploadCount((prev) => prev - 1)
+
+      return pending
+    })
+
+    const results = await Promise.allSettled(promises)
+
+    const errors = results
+      .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+      .map((r) => (r.reason instanceof Error ? r.reason.message : 'Upload failed'))
+
+    if (errors.length > 0) {
+      setError(errors.join('; '))
     }
 
-    setPendingFiles((prev) => [...prev, ...newPendingFiles])
     setUploading(false)
     setUploadCount(0)
   }
