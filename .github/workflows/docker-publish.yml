@@ -6,6 +6,13 @@ on:
       - main
     tags:
       - 'v*.*.*'
+    paths:
+      - '.github/workflows/docker-publish.yml'
+      - 'docker/**'
+      - 'frontend/**'
+      - 'backend/**'
+      - 'docker/**'
+      - 'requirements.txt'
 
 env:
   DOCKER_HUB_NAMESPACE: neonvariant
